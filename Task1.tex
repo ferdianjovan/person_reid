@@ -15,40 +15,40 @@
 \section{Introduction}
 In this short document we sketch some ideas about how to use simple Bayesian reasoning to change the outputs of a person ReID system, to change the performance measure, and to improve the performance of that ReID system given that performance measure.
 
-We first assume that we split the data into a training set, a validation set, and a test set. The training set is used to train the ReID system. The validation set is used to train the observation model for Bayesian inference. The test set is used to ascertain how good the performance of the Bayesian ReID system is. Each observation model gives the conditional probability of the output-ID from the algorithm given the true ID. So the output of the ReID pipeline is termed an observation. Each proposal essentially differs in  the observed output of the ReID pipeline. We suggest three alternatives: (i) the winning ID after voting by the retrieved images; (ii) the ratio of votes for and against the winner, and (iii) the vector of distances between the query image and the closest member of each ID class. %The training data might be picked randomly across time for each person to have better probability distribution depending on which idea we use.
-We also assume, in all cases, that the number of persons are known and fixed. New persons are classified as instances of a ``novel person'' class. In each case we have tried to build our extension on top of the existing person ReID system's output, i.e. the retrieval of a series of pictures, with associated IDs, from the training data. We also exploit the distance metric between instances that is described in your triplet-loss paper.
+We first assume that we split the data into a training set, a validation set, and a test set. The training set is used to train the ReID system. The validation set is used to train the observation model for Bayesian inference. The test set is used to ascertain how good the performance of the Bayesian ReID system is. Each observation model gives the conditional probability of the output from the algorithm given the true ID. So the output of the ReID pipeline is termed an observation. Each proposal essentially differs in the observed output of the ReID pipeline. We suggest these alternatives: (i) the winning ID after voting by the retrieved images; (ii) the ratio of votes for and against the winner, and (iii) the vector of distances between the query image and the closest member of each ID class. %The training data might be picked randomly across time for each person to have better probability distribution depending on which idea we use.
+We also assume, in all cases, that the number of persons are known and fixed. New persons are classified as instances of a ``novel person'' class. In each case we have tried to build our extension on top of the existing person ReID system's output, i.e. the retrieval of a series of pictures, with associated IDs, from the training data. We also exploit the distance metric between instances that is described in the triplet-loss paper.
 
-The random variable for the output class of the ReID system is $C$. An output of class $i$ is written $C=c_i$, or just $c_i$. The true class $j$ of the query image is $Q = q_j$. There are $K$ persons, including the novel person class. To make training the observation models sensible we need to have examples of novel persons in the validation set, i.e. persons that the ReID system was not trained on.
+The query image is $x$. If the output class of a ReID system is $i$ then $o(x)=o_i$, or just $o_i$.  The true person (class) $j$ of the query image is $c(x)=j$, or $c_j$. There are $K$ persons, including the novel person class. To make training the observation models sensible we need to have examples of novel persons in the validation set, i.e. persons that the ReID system was not trained on.
 
 \section{Winning ID as observed output}
 
 \includegraphics[width=\textwidth]{figures/first_idea.png}
 
-Assuming that the output of the person ReID system is structured as specified in figure above, the first idea is to learn the observation model by running the ReID retrieval and voting pipeline on the validation set. The observation model is simply derived from the resulting multi-class $(K-1 \times K)$ confusion matrix. Each cell states how likely an input image of person $j$ is--after the voting procedure--to be classified as class $i$. A trivial application of Bayes' rule gives the posterior over the true class:
+The first problem is how to massage the output of the baseline retrieval system into an output ID $o_i$. Here, we simply take the top $N$ retrievals, and they vote. The winning ID is the one with the most votes. The output of the person ReID system is thus as specified in figure above. Therefore, to learn the observation model, we run the ReID retrieval and voting pipeline on the validation set. The observation model is simply derived from the resulting multi-class $(K-1 \times K)$ confusion matrix. Each cell states how likely an input image of person $j$ is--after the voting procedure--to be classified as class $i$. A trivial application of Bayes' rule gives the posterior over the true class:
 
 \begin{equation}
 	\label{eq:first_idea}
 	\begin{tabular}{r@{=}l}
-		$P(q_j \mid c_i)$ & $\frac{\displaystyle P(c_i \mid q_j) P(q_j)}{\displaystyle\sum_{k=1}^{K} P(c_i \mid q_k) P(q_k)}$ \\ 
+		$P(c_j \mid o_i)$ & $\frac{\displaystyle P(o_i \mid c_j) P(c_j)}{\displaystyle\sum_{k=1}^{K} P(o_i \mid c_k) P(c_k)}$ \\ 
 	\end{tabular}
 \end{equation}
 
-This can easily be extended to a series of query images and the output IDs. Some vector $\overrightarrow{q_j}$ of $m$ query images of person $j$ is fed to the ReID system. The ReID system produces a corresponding $m$-dimensional vector of classifications $\overrightarrow{c}$. The probability $P(q_j \mid \overrightarrow{c})$ is:
+This can easily be extended to a series of query images and the output IDs. Some sequence $x^{1:m}$ of $m$ query images, all of person $j$, is fed to the ReID system. The ReID system produces a corresponding $m$-dimensional vector of classifications $\overrightarrow{o}$. The probability $P(c_j \mid \overrightarrow{o})$ is:
 
 \begin{equation}
 	\label{eq:joint_first_idea}
 	\begin{tabular}{r@{=}l}
-	$P(q_j \mid \overrightarrow{c})$ & $\displaystyle \prod_{k=1}^{m} P(q_{kj} \mid c_{k,i(c_k)})$ \\ 
+	$P(c_j \mid \overrightarrow{o})$ & $\displaystyle \prod_{k=1}^{m} P(c^k_{j} \mid o^k)$ \\ 
 	\end{tabular}
 \end{equation}
 
-\noindent with $\overrightarrow{c} = (c_{1,i(c_1)}, \ldots, c_{m,i(c_m)})$, and $\overrightarrow{q_j} = (q_{1j}, \ldots, q_{mj})$. We could either substitute this into Eq.~\ref{eq:first_idea} or apply it recursively to the elements of the product.%Given this joint probability $P(\overrightarrow{q_j} \mid \overrightarrow{c})$, then we can apply partial observability technique to correct the estimate of who the person might be whenever a series of detections of a person is made.
+\noindent with $\overrightarrow{o} = (o^1, \ldots, o^{m})$, and $\overrightarrow{c_j} = (c^1_{j}, \ldots, c^m_{j})$. We could either substitute this into Eq.~\ref{eq:first_idea} or apply it recursively, i.e. applying Bayesian update with each element of the product in turn.%Given this joint probability $P(\overrightarrow{q_j} \mid \overrightarrow{c})$, then we can apply partial observability technique to correct the estimate of who the person might be whenever a series of detections of a person is made.
 
 \section{Vote ratio as observed output}
 
 \includegraphics[width=\textwidth]{figures/second_idea.png}
 
-Now, if the person re-id system is specified as in figure above, we can calculate $P(\overrightarrow{v} \mid query = j)$ with $\overrightarrow{v} = <\#vote\_for, ~\#vote\_againts>$ by iterating each image of each person on the training set. Using this probability we know how likely that the voting goes right (or wrong) given a query of person $j$. Using this probability we can work out, using Bayesian inference, $P(query=j \mid \overrightarrow{v})$ as:
+Now, if the person re-id system is specified as in figure above, we can calculate $P(\overrightarrow{v} \mid query = j)$ with $\overrightarrow{v} = <\#vote\_for, ~\#vote\_against>$ by iterating each image of each person on the training set. Using this probability we know how likely that the voting goes right (or wrong) given a query of person $j$. Using this probability we can work out, using Bayesian inference, $P(query=j \mid \overrightarrow{v})$ as:
 
 \begin{equation}
 	\label{eq:second_idea}
