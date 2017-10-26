@@ -18,7 +18,7 @@ In this short document we sketch some ideas about how to use simple Bayesian rea
 We first assume that we split the data into a training set, a validation set, and a test set. The training set is used to train the ReID system. The validation set is used to train the observation model for Bayesian inference. The test set is used to ascertain how good the performance of the Bayesian ReID system is. Each observation model gives the conditional probability of the output from the algorithm given the true ID. So the output of the ReID pipeline is termed an observation. Each proposal essentially differs in the observed output of the ReID pipeline. We suggest these alternatives: (i) the winning ID after voting by the retrieved images; (ii) the ratio of votes for and against the winner, and (iii) the vector of distances between the query image and the closest member of each ID class. %The training data might be picked randomly across time for each person to have better probability distribution depending on which idea we use.
 We also assume, in all cases, that the number of persons are known and fixed. New persons are classified as instances of a ``novel person'' class. In each case we have tried to build our extension on top of the existing person ReID system's output, i.e. the retrieval of a series of pictures, with associated IDs, from the training data. We also exploit the distance metric between instances that is described in the triplet-loss paper.
 
-The query image is $x$. If the output class of a ReID system is $i$ then $o(x)=o_i$, or just $o_i$.  The true person (class) $j$ of the query image is $c(x)=j$, or $c_j$. There are $K$ persons, including the novel person class. To make training the observation models sensible we need to have examples of novel persons in the validation set, i.e. persons that the ReID system was not trained on.
+The query image is $x$. If the output class of a ReID system is $i$ then $o(x)=o_i$, or just $o_i$.  The true person (class) $j$ of the query image is $c(x)=j$, or $c_j$. There are $K$ persons, including the novel person class. The set of retrieved images is R. The subset of retrieved images corresponding to some person $j$ is $R_j$. To train the observation models we need examples of novel persons in the validation set, i.e. persons that the ReID system was not trained on.
 
 \section{Winning ID as observed output}
 
@@ -44,60 +44,66 @@ This can easily be extended to a series of query images and the output IDs. Some
 
 \noindent with $\overrightarrow{o} = (o^1, \ldots, o^{m})$, and $\overrightarrow{c_j} = (c^1_{j}, \ldots, c^m_{j})$. We could either substitute this into Eq.~\ref{eq:first_idea} or apply it recursively, i.e. applying Bayesian update with each element of the product in turn.%Given this joint probability $P(\overrightarrow{q_j} \mid \overrightarrow{c})$, then we can apply partial observability technique to correct the estimate of who the person might be whenever a series of detections of a person is made.
 
-\section{Vote ratio as observed output}
+\section{Votes as observed output}
 
-\includegraphics[width=\textwidth]{figures/second_idea.png}
+\includegraphics[width=\textwidth]{figures/second_idea_new.png}
 
-Now, if the person re-id system is specified as in figure above, we can calculate $P(\overrightarrow{v} \mid query = j)$ with $\overrightarrow{v} = <\#vote\_for, ~\#vote\_against>$ by iterating each image of each person on the training set. Using this probability we know how likely that the voting goes right (or wrong) given a query of person $j$. Using this probability we can work out, using Bayesian inference, $P(query=j \mid \overrightarrow{v})$ as:
-
-\begin{equation}
-	\label{eq:second_idea}
-	\begin{tabular}{r@{=}l}
-		$P(query=j \mid \overrightarrow{v})$ & $\frac{\displaystyle P(\overrightarrow{v} \mid query = j) P(query=j)}{\displaystyle\sum_{k=1}^{K} P(\overrightarrow{v} \mid query = k) P(query=k)}$ \\ 
-	\end{tabular}
-\end{equation}
-
-\noindent with $K$ the total persons.
-\\
-\\
-\noindent \textbf{Problems:}
-This idea is a bit odd, it can be seen from equation \ref{eq:second_idea}, because given the configuration voting $<v_f, v_a>$, then we want to know how likely the query person $j$ is. The $P(\overrightarrow{v} \mid query = j)$ seems more like a proportion of voting configuration for each person $j$.
-
-If we just calculate $P(<v_f, v_a>)$, then this just tells us the proportion of the voting configuration based on the training data.
-
-How can we transform this into, perhaps, a ratio of $\displaystyle\frac{P_j}{\Sigma_{i \neq j} P_i}$? 
+Suppose that, instead of taking the winner of a voting process as the observed output we take the distribution of votes over the categories. This means that we have to take the first $N$ votes only, and $N$ is likely to be far smaller than $K$ the number of categories. Nevertheless we can normalise the votes. Then, we can calculate the likelihood of drawing these normalised votes given some true class $j$. In this case we may estimate the observation model using a kernel estimator where the distance metric underpinning the kernels is the Hellinger distance. So, we use a validation set to estimate the density over vote distributions. Each normalised vote distribution constitutes a kernel centre on the $K$-dimensional simplex. The kernels are Gaussians defined using Hellinger distance. This gives us a kernel density representation of the likelihood of each normalised vote distribution for each class. We then apply Bayes' rule as before.
+%
+%Now, if the person re-id system is specified as in figure above, we can calculate $P(\overrightarrow{v} \mid query = j)$ with $\overrightarrow{v} = <\#vote\_for, ~\#vote\_against>$ by iterating each image of each person on the training set. Using this probability we know how likely that the voting goes right (or wrong) given a query of person $j$. Using this probability we can work out, using Bayesian inference, $P(query=j \mid \overrightarrow{v})$ as:
+%
+%\begin{equation}
+%	\label{eq:second_idea}
+%	\begin{tabular}{r@{=}l}
+%		$P(query=j \mid \overrightarrow{v})$ & $\frac{\displaystyle P(\overrightarrow{v} \mid query = j) P(query=j)}{\displaystyle\sum_{k=1}^{K} P(\overrightarrow{v} \mid query = k) P(query=k)}$ \\ 
+%	\end{tabular}
+%\end{equation}
+%
+%\noindent with $K$ the total persons.
+%\\
+%\\
+%\noindent \textbf{Problems:}
+%This idea is a bit odd, it can be seen from equation \ref{eq:second_idea}, because given the configuration voting $<v_f, v_a>$, then we want to know how likely the query person $j$ is. The $P(\overrightarrow{v} \mid query = j)$ seems more like a proportion of voting configuration for each person $j$.
+%
+%If we just calculate $P(<v_f, v_a>)$, then this just tells us the proportion of the voting configuration based on the training data.
+%
+%How can we transform this into, perhaps, a ratio of $\displaystyle\frac{P_j}{\Sigma_{i \neq j} P_i}$? 
 
 \section{Vector of distances as observed output}
 
-\includegraphics[width=\textwidth]{figures/third_idea.png}
+\includegraphics[width=\textwidth]{figures/third_idea_new.png}
 
-Using the specified re-id system as in figure above with $d(q_j, c_i)$ as the closest distance value between the query of person $j$ and the person classification $c_i$ (the person is classified as $i$), we can calculate the probability $P(d(q_j, c_i) \mid c_i)$ using the (general) distributions over the distance for both matched image and negative images (graphs shown in Figure \ref{fig:match_mismatch_dist}). Using this probability we can work out, using Bayesian inference, $P(c_i \mid d(q_j, c_i))$ as:
+Let us now suppose that instead of predicted class, or vote distribution, the ReID system simply outputs the distances between the query and other images. The ReID system is then as in the figure above. $d(o_i, c_j)$ is the distance value between the query image of person $j$ and the retrieved image of person $i$. From a validation set we can learn two distributions. First, the distribution of distances conditioned on the true class and output class being identical ($i=j$). Second, the distribution of distances conditioned on the true class and output class being different. These learned distributions should probably be calculated from several days of data, and not be class specific, although they could be. Then the likelihood of the distances associated with the $N$ retrieved images can be written as follows:
+
+\begin{equation}
+P(R | c_i) = \prod_{r_a \in R^c_i} P(d(x,r_a)|i=j) \prod_{r_b \in R_i} P(d(x,r_b)|i \neq j)
+\end{equation}
+
+This uses the learned distributions over the distance given matched images ($i=j$) and non-matched images ($i \neq j$) (an example histogram from which we can obtain an estimated distribution is in Figure~\ref{fig:dist}). Using this probability the posterior would be:
 
 \begin{equation}
 	\label{eq:third_idea}
-	\begin{tabular}{r@{=}l}
-		$P(c_i \mid d(q_j, c_i))$ & $\frac{\displaystyle P(d(q_j, c_i) \mid c_i) P(c_i)}{\displaystyle\sum_{k=1}^{n} P(d(q_j, c_k) \mid c_k) P(c_k)}$ \\ 
-	\end{tabular}
+		P(c_i \mid R) \propto P(R| c_i) P(c_i)
 \end{equation}
 
-\noindent with $n$ the total persons. However, this only works out if the person retrieval system provides the distance $d(q_j, c_i)$ for all $1 \leq i \leq n$ in each query.
+%\noindent with $n$ the total persons. However, this only works out if the person retrieval system provides the distance $d(q_j, c_i)$ for all $1 \leq i \leq n$ in each query.
 
-\begin{figure*}
+\begin{figure}
 	\centering
 	\includegraphics[width=0.40\textwidth]{./figures/match_mismatch_dist.png}
-	\caption{Assuming this is a distribution over distance with blue is a distribution for matched query-image ($q_j = c_i$) and orange is a distribution for negative images ($q_j \neq c_i$).}
-	\label{fig:match_mismatch_dist}
-\end{figure*}
+	\caption{Histogram for queries over distance. Blue is for matched IDs ($j = i$) and orange is for unmatched ($j \neq i$).
+	\label{fig:dist}}
+\end{figure}
 
-Given particular time interval $m$ where a series of $m$ query images of person $j$ is fed to the system producing distances $d(q_{1j}, c_{1i}), \ldots, d(q_{mj}, c_{mi})$, then the probability $P(\overrightarrow{c_i} \mid \overrightarrow{d(q_j, c_i)})$ can be defined as:
+Given particular time interval $0:t$, where a series of query images of person $j$ is fed to the system,  $R_{0:t}$ is the series of retrievals. The posterior is then simply:
 
 \begin{equation}
 	\label{eq:joint_third_idea}
-	\begin{tabular}{r@{=}l}
-		$P(\overrightarrow{c_i} \mid \overrightarrow{d(q_j, c_i)})$ & $\displaystyle \prod_{k=1}^{m} P(c_{ki} \mid d(q_{kj}, c_{ki}))$ \\ 
-	\end{tabular}
+		P(c_i \mid R_{0:t}) =  \prod_{k=0}^{t} P(c_{i} \mid R_k)) \\ 
 \end{equation}
 
-\noindent with $\overrightarrow{c_i} = (c_{1i}, \ldots, c_{mi})$, and $\overrightarrow{d(q_j, c_i)} = (d(q_{1j}, c_{1i}), \ldots, d(q_{mj}, c_{mi}))$.
+\section{Bayesian reasoning with Rankings}
+
+There are some papers I've recently found on Bayesian methods for dealing with ranked data. I think this would be an interesting approach to explore, but I haven't had time yet to do the reading. Nevertheless this would be one more way to think out the output.
 
 \end{document}
